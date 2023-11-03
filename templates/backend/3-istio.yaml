@@ -1,0 +1,86 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: {{.Values.name}}
+spec:
+  selector:
+    istio: ingressgateway # use Istio default gateway implementation
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - {{.Values.host}}
+---
+#
+# Main ingress for the backend that will split between stage and primary during deployment
+#
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{.Values.name}}
+spec:
+  hosts:
+  - {{.Values.host}}
+  gateways:
+  - {{.Values.name}}
+  http:
+  - match:
+    - uri:
+        exact: /{{.Values.name}}
+    rewrite:
+      uri: /color/index.html
+    route:
+    - destination:
+        host: {{.Values.primaryName}}
+    {{- if .Values.splitTraffic}}
+      weight: {{.Values.primaryWeight}}
+    - destination:
+        host: {{.Values.stageName}}
+      weight: {{.Values.stageWeight}}
+    {{- end}}
+---
+#
+# Dedicated ingress for stage
+#
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{.Values.stageName}}
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - {{.Values.name}}
+  http:
+  - match:
+    - uri:
+        exact: /{{.Values.stageName}}
+    rewrite:
+      uri: /color/index.html
+    route:
+    - destination:
+        host: {{.Values.stageName}}
+---
+#
+# Dedicated ingress for primary
+#
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{.Values.primaryName}}
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - {{.Values.name}}
+  http:
+  - match:
+    - uri:
+        exact: /{{.Values.primaryName}}
+    rewrite:
+      uri: /color/index.html
+    route:
+    - destination:
+        host: {{.Values.primaryName}}
